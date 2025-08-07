@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Discord Auto-Chat Manager</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #36393f;
+            color: #dcddde;
+        }
+        .container {
+            background-color: #2f3136;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        h1 {
+            color: #7289da;
+            text-align: center;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input, textarea, select {
+            width: 100%;
+            padding: 10px;
+            border-radius: 4px;
+            border: 1px solid #202225;
+            background-color: #40444b;
+            color: #dcddde;
+        }
+        button {
+            background-color: #7289da;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background-color 0.2s;
+        }
+        button:hover {
+            background-color: #677bc4;
+        }
+        button:disabled {
+            background-color: #4a4d52;
+            cursor: not-allowed;
+        }
+        .status {
+            margin-top: 20px;
+            padding: 10px;
+            border-radius: 4px;
+            text-align: center;
+        }
+        .online {
+            background-color: #3ba55d;
+        }
+        .offline {
+            background-color: #ed4245;
+        }
+        .section {
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #40444b;
+        }
+        .section-title {
+            color: #b9bbbe;
+            margin-bottom: 15px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Discord Auto-Chat Manager</h1>
+        
+        <div class="section">
+            <h2 class="section-title">Bot Connection</h2>
+            <div class="form-group">
+                <label for="token">Discord Token:</label>
+                <input type="password" id="token" placeholder="Enter your Discord token">
+                <small>Warning: Selfbots violate Discord's ToS. Use at your own risk.</small>
+            </div>
+            
+            <div class="form-group">
+                <button id="toggleBot">Start Bot</button>
+                <div id="status" class="status offline">Offline</div>
+            </div>
+        </div>
+        
+        <div class="section">
+            <h2 class="section-title">Auto-Reply Settings</h2>
+            <div class="form-group">
+                <label for="replyMessage">Reply Message:</label>
+                <textarea id="replyMessage" rows="3" placeholder="Message to send when someone DMs you"></textarea>
+            </div>
+        </div>
+        
+        <div class="section">
+            <h2 class="section-title">Auto-Chat Settings</h2>
+            <div class="form-group">
+                <label for="channelId">Channel ID:</label>
+                <input type="text" id="channelId" placeholder="Channel ID to send messages to">
+            </div>
+            <div class="form-group">
+                <label for="autoChatMessage">Auto-Chat Message:</label>
+                <textarea id="autoChatMessage" rows="3" placeholder="Message to send automatically"></textarea>
+            </div>
+            <div class="form-group">
+                <label for="delay">Delay (milliseconds):</label>
+                <input type="number" id="delay" value="5000" min="1000">
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const toggleBtn = document.getElementById('toggleBot');
+        const statusDiv = document.getElementById('status');
+        let isRunning = false;
+        
+        toggleBtn.addEventListener('click', async () => {
+            if (isRunning) {
+                await stopBot();
+            } else {
+                await startBot();
+            }
+        });
+        
+        async function startBot() {
+            const token = document.getElementById('token').value;
+            const replyMessage = document.getElementById('replyMessage').value;
+            const channelId = document.getElementById('channelId').value;
+            const autoChatMessage = document.getElementById('autoChatMessage').value;
+            const delay = document.getElementById('delay').value;
+            
+            if (!token) {
+                alert('Please enter your Discord token');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/start', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        token,
+                        replyMessage,
+                        autoChatMessage,
+                        channelId,
+                        delay
+                    })
+                });
+                
+                if (response.ok) {
+                    isRunning = true;
+                    toggleBtn.textContent = 'Stop Bot';
+                    statusDiv.textContent = 'Online';
+                    statusDiv.className = 'status online';
+                } else {
+                    const error = await response.text();
+                    alert(`Error: ${error}`);
+                }
+            } catch (err) {
+                console.error('Error starting bot:', err);
+                alert('Failed to start bot');
+            }
+        }
+        
+        async function stopBot() {
+            try {
+                const response = await fetch('/stop', {
+                    method: 'POST'
+                });
+                
+                if (response.ok) {
+                    isRunning = false;
+                    toggleBtn.textContent = 'Start Bot';
+                    statusDiv.textContent = 'Offline';
+                    statusDiv.className = 'status offline';
+                }
+            } catch (err) {
+                console.error('Error stopping bot:', err);
+                alert('Failed to stop bot');
+            }
+        }
+        
+        // Check bot status on page load
+        async function checkStatus() {
+            try {
+                const response = await fetch('/status');
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.running) {
+                        isRunning = true;
+                        toggleBtn.textContent = 'Stop Bot';
+                        statusDiv.textContent = `Online as ${data.username}`;
+                        statusDiv.className = 'status online';
+                    }
+                }
+            } catch (err) {
+                console.error('Error checking status:', err);
+            }
+        }
+        
+        // Uncomment to enable status check on load
+        // checkStatus();
+    </script>
+</body>
+          </html>
